@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+</head>
+
+<body>
+    <center>
+        <br>
+        <font size="+2" color=0000CC> {{genre_name}} Search Page </font>
+        <br><br>
+    </center>
+
+
+
+    <form action="?genre_name={{genre_name}}" method="get">
+        <div>
+            <label for="artist">Artist's Name:</label>
+            <input type="hidden" name="genre_name" value= {{genre_name}} />
+            <input type="text" name="artist" maxlength="20"/>
+            </div>
+        <div class="button"><button type="submit">Search</button></div>
+    </form>
+
+    <form>Genre:
+        <input value="{{genre_name}}" name="genre_name">
+        <button type="submit">Switch</button>
+    </form>
+    <br><br>
+
+    <div class="container">
+      <center>
+          <br>
+          {{message}}
+          <br>
+      </center>
+
+        <ul>
+            {% for song in song_list %}
+              <li> <p> {{song.title}}, {{song.artist}}, {{song.album}} </p> </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+
+
+    <center>
+        <a href=/> Return to main page </a>
+    </center>
+
+</body>
+
+</html>

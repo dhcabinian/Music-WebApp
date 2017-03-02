@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+    <title> Davids Song Library </title>
+</head>
+
+<body>
+    <center>
+        <br>
+        <font size="+2" color=0000CC> Davids Song Library </font>
+        <br><br><br>
+    </center>
+    <div class="container">
+        <ul>
+            {% for genre in genres %}
+              <li> <a href=display/?genre_name={{genre}}> Browse {{genre}} titles </a> </li>
+            {% endfor %}
+              <li> <a href=search/> Search for songs by artist </a> </li>
+              <li> <a href=create_song> Enter new song info </a> </li>
+              <li> <a href=create_genre> Enter new genre info </a> </li>
+        </ul>
+    </div>
+</body>
+
+
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+    <title> Davids Song Library </title>
+</head>
+
+<body>
+    <center>
+        <br>
+        <font size="+2" color=0000CC> Davids Song Library: {{genre}} Titles </font>
+        <br><br><br>
+    </center>
+    <div class="container">
+        <ul>
+            {% for song in song_list %}
+              <li> <p> {{song.title}}, {{song.artist}}, {{song.album}} </p> </li>
+            {% endfor %}
+        </ul>
+    </div>
+</body>
+
+<center>
+    <a href=/> Return to main page </a>
+</center>
+
+</html>

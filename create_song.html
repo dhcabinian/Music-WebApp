@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <link type="text/css" rel="stylesheet" href="/stylesheets/main.css" />
+</head>
+
+<body>
+
+    <center>
+        <br>
+        <font size="+2" color=0000CC> Enter New Song Information for {{genre_name}} </font>
+        <br>
+    </center>
+
+    <form action="/create_song?genre_name={{genre_name}}" method="post">
+        <div>
+            <label for="artist">Artist's Name:</label>
+            <input type="text" name="artist" /> </div>
+        <div>
+            <label for="title">Title:</label>
+            <input type="text" name="title" /> </div>
+        <div>
+            <label for="album">Album Name (optional):</label>
+            <input type="text" name="album" /> </div>
+        <div class="button"><button type="submit">Enter song info</button></div>
+    </form>
+
+    <form>Genre:
+        <input value="{{genre_name}}" name="genre_name">
+        <button type="submit">Switch</button>
+    </form>
+
+    <div class="container">
+      <center>
+          <br>
+          {{message}}
+          <br>
+      </center>
+    </div>
+
+    <center>
+        <a href=/> Return to main page </a>
+    </center>
+
+</body>
+
+</html>
