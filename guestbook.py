@@ -55,6 +55,7 @@ class Song(ndb.Model):
     album = ndb.StringProperty(indexed=False)
     date = ndb.DateTimeProperty(auto_now_add=True)
     price = ndb.FloatProperty(indexed=False)
+    price_format = ndb.StringProperty(indexed=False)
 
 
 class Genre(ndb.Model):
@@ -112,6 +113,14 @@ class GenrePage(webapp2.RequestHandler):
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
             self.response.write(template.render(template_values))
 
+
+
+def price_checker(unchecked_price):
+    if unchecked_price > 0 and unchecked_price <= 100:
+        return True
+    else:
+        return False
+
 # Should contain
 #   Artist name box
 #   Title box
@@ -141,18 +150,27 @@ class CreateSongPage(webapp2.RequestHandler):
             artist = self.request.get('artist').lower()
             title = self.request.get('title').lower()
             album = self.request.get('album').lower()
-            if artist == '' or title == '':
-                message = 'Title or Artist was left blank'
+            if self.request.get('price') != '':
+                if price_checker(float(self.request.get('price'))):
+                    price = float(self.request.get('price'))
+                else:
+                    price = ''
+            else:
+                price = ''
+            if artist == '' or title == '' or price == '':
+                message = 'Title or Artist or Price was left blank or entered incorectly'
             else:
                 genre_obj = get_genre_key(genre_name).get()
                 current_list = genre_obj.song_list
+                price_format = '${:,.2f}'.format(price)
                 new_song = Song(parent=get_genre_key(genre_name),
-                                title=title, artist=artist, album=album)
+                                title=title, artist=artist, album=album, price=price, price_format=price_format)
                 new_song.put()
                 new_list = current_list + [new_song]
                 genre_obj.song_list = new_list
                 genre_obj.put()
-                message = 'Created song in genre ' + genre_name.title() + ': Title: ' + \
+                message = 'Created song in genre ' + genre_name.title() + \
+                    ': Price: ' + new_song.price_format + ', Title: ' + \
                     new_song.title.title() + ', Artist: ' + new_song.artist.title()
                 if new_song.album != '':
                     message += ', Album: ' + new_song.album.title()
@@ -233,7 +251,7 @@ class SearchPage(webapp2.RequestHandler):
             if filtered_list == []:
                 message = 'No songs found'
             else:
-                message = 'Found songs in ' + genre_name
+                message = 'Found songs in ' + genre_name.title()
 
             template_values = {
                 'genre_name': genre_name.title(),

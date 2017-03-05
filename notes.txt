@@ -1,0 +1,4 @@
+dev_appserver.py ./ 
+gcloud projects list
+gcloud app browse
+gcloud app deploy --project david-cabinian-music-shopping app.yaml index.yaml
