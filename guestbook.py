@@ -54,6 +54,7 @@ class Song(ndb.Model):
     artist = ndb.StringProperty(indexed=True)
     album = ndb.StringProperty(indexed=False)
     date = ndb.DateTimeProperty(auto_now_add=True)
+    price = ndb.FloatProperty(indexed=False)
 
 
 class Genre(ndb.Model):
@@ -74,11 +75,11 @@ class MainPage(webapp2.RequestHandler):
         genre_list = []
         for genre in genre_entity_list:
             genre_list.append(genre.genre_name.title())
-
-        print(genre_list)
-
+        template_values = {
+            'genres': genre_list,
+        }
         template = JINJA_ENVIRONMENT.get_template('mainpage.html')
-        self.response.write(template.render(genres=genre_list))
+        self.response.write(template.render(template_values))
 
 
 # Should contain
@@ -87,26 +88,29 @@ class MainPage(webapp2.RequestHandler):
 class GenrePage(webapp2.RequestHandler):
 
     def get(self):
-        print self.request.get('genre_name', DEFAULT_GENRE_NAME)
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         if contains_genre(genre_name):
-            print genre_name
             genre_key = get_genre_key(genre_name)
             genre_obj = genre_key.get()
             song_list = genre_obj.song_list
             genre_name = genre_obj.genre_name.title()
-
             for song in song_list:
                 song.artist = song.artist.title()
                 song.title = song.title.title()
                 song.album = song.album.title()
-
+            template_values = {
+                'genre': genre_name,
+                'song_list': song_list,
+            }
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
-            self.response.write(template.render(
-                genre=genre_name, song_list=song_list))
+            self.response.write(template.render(template_values))
         else:
+            template_values = {
+                'genre': genre_name,
+                'song_list': [],
+            }
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
-            self.response.write(template.render(genre=genre_name, song_list=[]))
+            self.response.write(template.render(template_values))
 
 # Should contain
 #   Artist name box
@@ -132,27 +136,22 @@ class CreateSongPage(webapp2.RequestHandler):
     def post(self):
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         if not contains_genre(genre_name):
-            print 'here'
             message = 'Genre has not been created or was misspelled'
         else:
             artist = self.request.get('artist').lower()
             title = self.request.get('title').lower()
             album = self.request.get('album').lower()
-            print genre_name + artist + title + album
             if artist == '' or title == '':
                 message = 'Title or Artist was left blank'
             else:
                 genre_obj = get_genre_key(genre_name).get()
                 current_list = genre_obj.song_list
-                print 'current_list = '
-                print current_list
                 new_song = Song(parent=get_genre_key(genre_name),
                                 title=title, artist=artist, album=album)
                 new_song.put()
                 new_list = current_list + [new_song]
                 genre_obj.song_list = new_list
                 genre_obj.put()
-                print genre_obj.song_list
                 message = 'Created song in genre ' + genre_name.title() + ': Title: ' + \
                     new_song.title.title() + ', Artist: ' + new_song.artist.title()
                 if new_song.album != '':
@@ -191,7 +190,6 @@ class CreateGenrePage(webapp2.RequestHandler):
         if ' ' in new_genre:
             message = "Spaces in message not allowed"
         else:
-            print 'New Genre = ' + new_genre
             genre_obj = Genre(parent=get_library_key(
                 library_name), genre_name=new_genre)
             genre_obj.put()
@@ -221,16 +219,7 @@ class SearchPage(webapp2.RequestHandler):
             new_page = 1
             genre_name = DEFAULT_GENRE_NAME
         artist = self.request.get('artist').lower()
-        print genre_name + artist
         if artist != '':
-            # genre_key = get_genre_key(genre_name)
-            # all_song_list_query = Song.query(ancestor=genre_key)
-            # print all_song_list_query.fetch(DEFAULT_SONG_NUMBER)
-            # filtered_list_query = all_song_list_query.filter(Song.artist == artist)
-            # song_list = filtered_list_query.fetch(DEFAULT_SONG_NUMBER)
-            # print 'genre_current_list = '
-            # print  song_list
-
             genre_key = get_genre_key(genre_name)
             genre_obj = genre_key.get()
             song_list = genre_obj.song_list
