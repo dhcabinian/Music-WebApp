@@ -1,20 +1,5 @@
 #!/usr/bin/env python
 
-# Copyright 2016 Google Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# [START imports]
 import os
 import urllib
 
@@ -28,16 +13,13 @@ JINJA_ENVIRONMENT = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)),
     extensions=['jinja2.ext.autoescape'],
     autoescape=True)
-# [END imports]
 
 DEFAULT_GENRE_NAME = 'Trap'
 DEFAULT_LIBRARY_NAME = 'David\'s Library'
 DEFAULT_SONG_NUMBER = 50
 
-
 def get_library_key(library_name=DEFAULT_LIBRARY_NAME):
     return ndb.Key('Library', library_name)
-
 
 def get_genre_key(genre_name=DEFAULT_GENRE_NAME):
     library_name = DEFAULT_LIBRARY_NAME
@@ -48,7 +30,6 @@ def get_genre_key(genre_name=DEFAULT_GENRE_NAME):
             return genre.key
     return None
 
-
 class Song(ndb.Model):
     title = ndb.StringProperty(indexed=True)
     artist = ndb.StringProperty(indexed=True)
@@ -57,11 +38,27 @@ class Song(ndb.Model):
     price = ndb.FloatProperty(indexed=False)
     price_format = ndb.StringProperty(indexed=False)
 
-
 class Genre(ndb.Model):
     genre_name = ndb.StringProperty(indexed=True)
     song_list = ndb.StructuredProperty(Song, repeated=True)
 
+class Cart(ndb.Model):
+    song_list = ndb.StructuredProperty(Song, repeated=True)
+    subtotal = ndb.FloatProperty(indexed=False)
+    subtotal_format = ndb.StringProperty(indexed=False)
+
+class Purchase(ndb.Model):
+    song_list = ndb.StructuredProperty(Song, repeated=True)
+    subtotal = ndb.FloatProperty(indexed=False)
+    subtotal_format = ndb.StringProperty(indexed=False)
+    dateTime = ndb.DateTimeProperty(auto_now_add=True)
+    user = ndb.UserProperty()
+    user_id = ndb.StringProperty(indexed=False)
+
+class User(ndb.Model):
+    cart = ndb.StructuredProperty(Cart)
+    user = ndb.UserProperty()
+    user_id = ndb.StringProperty()
 
 # Should contain
 #   Links to each genre
@@ -70,18 +67,32 @@ class Genre(ndb.Model):
 class MainPage(webapp2.RequestHandler):
 
     def get(self):
+        #Genre List Generation
         library_name = DEFAULT_LIBRARY_NAME
         genre_entity_list = Genre.query(ancestor=get_library_key(
             library_name)).fetch(DEFAULT_SONG_NUMBER)
         genre_list = []
         for genre in genre_entity_list:
             genre_list.append(genre.genre_name.title())
+
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
+
+        #Rendering
         template_values = {
             'genres': genre_list,
+            'url': url,
+            'url_linktext':url_linktext,
         }
         template = JINJA_ENVIRONMENT.get_template('mainpage.html')
         self.response.write(template.render(template_values))
-
 
 # Should contain
 #   List of all songs in that Genre
@@ -89,31 +100,48 @@ class MainPage(webapp2.RequestHandler):
 class GenrePage(webapp2.RequestHandler):
 
     def get(self):
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
+
+        #Genre List Generation
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         if contains_genre(genre_name):
             genre_key = get_genre_key(genre_name)
             genre_obj = genre_key.get()
             song_list = genre_obj.song_list
+            #Converting back to uppercase
             genre_name = genre_obj.genre_name.title()
             for song in song_list:
                 song.artist = song.artist.title()
                 song.title = song.title.title()
                 song.album = song.album.title()
+
+            #Rednering
             template_values = {
                 'genre': genre_name,
                 'song_list': song_list,
+                'url': url,
+                'url_linktext':url_linktext,
             }
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
             self.response.write(template.render(template_values))
         else:
+            #Rendering
             template_values = {
                 'genre': genre_name,
                 'song_list': [],
+                'url': url,
+                'url_linktext':url_linktext,
             }
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
             self.response.write(template.render(template_values))
-
-
 
 def price_checker(unchecked_price):
     if unchecked_price > 0 and unchecked_price <= 100:
@@ -129,27 +157,51 @@ def price_checker(unchecked_price):
 #   Genre select box
 #   Genre switch button
 #   Return to main page link
-
-
 class CreateSongPage(webapp2.RequestHandler):
 
     def get(self):
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
+
+        #Obtaining Genre to add to
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
+
         template_values = {
             'genre_name': genre_name.title(),
             'message': '',
+            'url': url,
+            'url_linktext':url_linktext,
         }
         template = JINJA_ENVIRONMENT.get_template('create_song.html')
         self.response.write(template.render(template_values))
 
     def post(self):
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
+        #Obtaining Genre to add to
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         if not contains_genre(genre_name):
             message = 'Genre has not been created or was misspelled'
         else:
+            # Convert to lowercase for stoarge and easy matching
             artist = self.request.get('artist').lower()
             title = self.request.get('title').lower()
             album = self.request.get('album').lower()
+            #Valid Price Checking
             if self.request.get('price') != '':
                 if price_checker(float(self.request.get('price'))):
                     price = float(self.request.get('price'))
@@ -160,6 +212,7 @@ class CreateSongPage(webapp2.RequestHandler):
             if artist == '' or title == '' or price == '':
                 message = 'Title or Artist or Price was left blank or entered incorectly'
             else:
+                # Add objects
                 genre_obj = get_genre_key(genre_name).get()
                 current_list = genre_obj.song_list
                 price_format = '${:,.2f}'.format(price)
@@ -169,14 +222,18 @@ class CreateSongPage(webapp2.RequestHandler):
                 new_list = current_list + [new_song]
                 genre_obj.song_list = new_list
                 genre_obj.put()
+                #Generate messages
                 message = 'Created song in genre ' + genre_name.title() + \
                     ': Price: ' + new_song.price_format + ', Title: ' + \
                     new_song.title.title() + ', Artist: ' + new_song.artist.title()
                 if new_song.album != '':
                     message += ', Album: ' + new_song.album.title()
+        #Rendering
         template_values = {
             'genre_name': genre_name.title(),
             'message': message,
+            'url': url,
+            'url_linktext':url_linktext,
         }
         template = JINJA_ENVIRONMENT.get_template('create_song.html')
         self.response.write(template.render(template_values))
@@ -191,18 +248,37 @@ def contains_genre(genre_name):
                 contains = True
         return contains
 
-
 class CreateGenrePage(webapp2.RequestHandler):
 
     def get(self):
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
         template = JINJA_ENVIRONMENT.get_template('create_genre.html')
         template_values = {
             'new_genre': '',
             'message': '',
+            'url': url,
+            'url_linktext':url_linktext,
         }
         self.response.write(template.render(template_values))
 
     def post(self):
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
         library_name = DEFAULT_LIBRARY_NAME
         new_genre = self.request.get('new_genre').lower()
         if ' ' in new_genre:
@@ -216,6 +292,8 @@ class CreateGenrePage(webapp2.RequestHandler):
         template_values = {
             'new_genre': new_genre.title(),
             'message': message,
+            'url': url,
+            'url_linktext':url_linktext,
         }
         self.response.write(template.render(template_values))
 
@@ -225,11 +303,18 @@ class CreateGenrePage(webapp2.RequestHandler):
 #   genre box
 #   Switch button
 #   Return to home link
-
-
 class SearchPage(webapp2.RequestHandler):
 
     def get(self):
+        #User Login
+        user = users.get_current_user()
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
         template = JINJA_ENVIRONMENT.get_template('search.html')
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         new_page = 0
@@ -257,6 +342,8 @@ class SearchPage(webapp2.RequestHandler):
                 'genre_name': genre_name.title(),
                 'song_list': filtered_list,
                 'message': message,
+                'url': url,
+                'url_linktext':url_linktext,
             }
             self.response.write(template.render(template_values))
         else:
@@ -268,9 +355,10 @@ class SearchPage(webapp2.RequestHandler):
                 'genre_name': genre_name.title(),
                 'song_list': [],
                 'message': message,
+                'url': url,
+                'url_linktext':url_linktext,
             }
             self.response.write(template.render(template_values))
-
 
 app = webapp2.WSGIApplication([
     ('/', MainPage),
@@ -280,4 +368,3 @@ app = webapp2.WSGIApplication([
     ('/create_song', CreateSongPage),
     ('/create_genre', CreateGenrePage),
 ], debug=True)
-# [END app]
