@@ -457,7 +457,7 @@ class CartPage(webapp2.RequestHandler):
             template = JINJA_ENVIRONMENT.get_template('cart.html')
             self.response.write(template.render(template_values))
         else:
-            message = 'Please log in in order to see your cart.'
+            message = 'Please log in in order to see and make changes to your cart.'
             template_values = {
                 'song_list': [],
                 'message': message,
