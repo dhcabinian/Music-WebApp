@@ -37,13 +37,20 @@
           <br>
       </center>
 
-        <ul>
-            {% for song in song_list %}
-              <li> <p> {{song.price_format}}, {{song.title}}, {{song.artist}}, {{song.album}} </p> </li>
-            {% endfor %}
-        </ul>
-    </div>
+      <form action="" method="post">
+        {% for song in song_list %}
+          <input type="checkbox" name="Song{{ loop.index0 }}" value="{{ song.key }}"> {{song.price_format}}, {{song.title}}, {{song.artist}}, {{song.album}}
+          <br>
+          <input type="hidden" name="numOfSongs" value="{{ loop.length }}">
+        {% endfor %}
+        <br><br>
+        <input type="submit" value="Add to cart">
+      </form>
 
+    </div>
+    <center>
+        <a href="/cart"> Go to Cart </a>
+    </center>
     <center>
         <a href="{{ url|safe }}"/> {{ url_linktext }} </a>
     </center>
