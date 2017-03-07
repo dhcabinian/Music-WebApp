@@ -249,13 +249,9 @@ class GenrePage(webapp2.RequestHandler):
 
 def price_checker(handler):
     if handler.request.get('price') != '':
-        if price_checker(float(handler.request.get('price'))):
-            unchecked_price = float(handler.request.get('price'))
-            if 0 < unchecked_price <= 100:
-                return unchecked_price
-            else:
-                price = ''
-                return price
+        unchecked_price = float(handler.request.get('price'))
+        if 0 < unchecked_price <= 100:
+            return unchecked_price
         else:
             price = ''
             return price
@@ -296,7 +292,7 @@ class CreateSongPage(webapp2.RequestHandler):
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         # Obtaining Genre to add to
-        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
         genre_key = get_genre_key(genre_name)
         if genre_key.get() is None:
             message = 'Genre has not been created or was misspelled'
@@ -332,9 +328,9 @@ class CreateSongPage(webapp2.RequestHandler):
                 # Generate messages
                 message = 'Created song in genre ' + genre_name + \
                           ': Price: ' + new_song.price_format + ', Title: ' + \
-                          new_song.title.title() + ', Artist: ' + new_song.artist.title()
+                          new_song.title + ', Artist: ' + new_song.artist
                 if new_song.album != '':
-                    message += ', Album: ' + new_song.album.title()
+                    message += ', Album: ' + new_song.album
         # Rendering
         template_values = {
             'genre_name': genre_name,
@@ -354,7 +350,7 @@ class CreateGenrePage(webapp2.RequestHandler):
 
         template = JINJA_ENVIRONMENT.get_template('create_genre.html')
         template_values = {
-            'new_genre': '',
+            'message': '',
             'message': '',
             'url': url,
             'url_linktext': url_linktext,
@@ -383,7 +379,6 @@ class CreateGenrePage(webapp2.RequestHandler):
             library_obj.put()
             message = "Created genre: " + new_genre
         template_values = {
-            'new_genre': new_genre,
             'message': message,
             'url': url,
             'url_linktext': url_linktext,
@@ -407,7 +402,7 @@ class SearchPage(webapp2.RequestHandler):
         template = JINJA_ENVIRONMENT.get_template('search.html')
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
         new_page = 0
-        if self.request.get('genre_name').lower() == '':
+        if self.request.get('genre_name') == '':
             new_page = 1
             genre_name = DEFAULT_GENRE_NAME
         artist = self.request.get('artist')
@@ -446,6 +441,76 @@ class SearchPage(webapp2.RequestHandler):
             }
             self.response.write(template.render(template_values))
 
+
+    def post(self):
+        libraryCheck()
+        # User Login
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
+        template = JINJA_ENVIRONMENT.get_template('search.html')
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
+        new_page = 0
+        if self.request.get('genre_name') == '':
+            new_page = 1
+            genre_name = DEFAULT_GENRE_NAME
+        artist = self.request.get('artist')
+        if artist != '':
+            genre_key = get_genre_key(genre_name)
+            genre_obj = genre_key.get()
+            song_list = genre_obj.song_list
+            filtered_list = []
+            for song in song_list:
+                if artist.lower() in song.s_artist:
+                    filtered_list.append(song)
+            if not filtered_list:
+                message = 'No songs found'
+            else:
+                message = 'Found songs in ' + genre_name + '\n'
+                if foundUser:
+                    numOfSongs = int(self.request.get('numOfSongs', 0))
+                    added_songs = []
+                    for index in range(0, numOfSongs):
+                        htmlName = 'Song' + str(index)
+                        song_url_string = self.request.get(htmlName, '')
+                        if song_url_string is not '':
+                            added_songs.append(song_url_string)
+                    new_cart_song_list = cart_obj.song_list
+                    for song_url_string in added_songs:
+                        song_key = ndb.Key(urlsafe=song_url_string)
+                        song_obj = song_key.get()
+                        new_cart_song_list = new_cart_song_list + [song_obj]
+                    cart_obj.song_list = new_cart_song_list
+                    cart_obj.put()
+                    updateCart(cart_obj)
+                    user_obj.cart = cart_obj
+                    user_obj.put()
+                    message = message + 'Added new songs to cart.'
+                else:
+                    message = 'Please login in order to add things to cart.'
+
+            template_values = {
+                'genre_name': genre_name,
+                'song_list': filtered_list,
+                'message': message,
+                'url': url,
+                'url_linktext': url_linktext,
+            }
+            self.response.write(template.render(template_values))
+        else:
+            if new_page == 1:
+                message = ''
+            else:
+                message = 'No artist entered'
+            template_values = {
+                'genre_name': genre_name,
+                'song_list': [],
+                'message': message,
+                'url': url,
+                'url_linktext': url_linktext,
+            }
+            self.response.write(template.render(template_values))
+
+
 class CartPage(webapp2.RequestHandler):
     def get(self):
         libraryCheck()
@@ -457,6 +522,7 @@ class CartPage(webapp2.RequestHandler):
             song_list = cart_obj.song_list
 
             template_values = {
+                'subtotal': cart_obj.subtotal_format,
                 'song_list': song_list,
                 'message': message,
                 'url': url,
@@ -467,6 +533,7 @@ class CartPage(webapp2.RequestHandler):
         else:
             message = 'Please log in in order to see your cart.'
             template_values = {
+                'subtotal': '',
                 'song_list': [],
                 'message': message,
                 'url': url,
@@ -500,6 +567,7 @@ class CartPage(webapp2.RequestHandler):
                             new_cart_song_list.remove(song)
                 cart_obj.song_list = new_cart_song_list
                 cart_obj.put()
+                updateCart(cart_obj)
                 user_obj.cart = cart_obj
                 user_obj.put()
                 message = 'Removed songs from cart.'
@@ -524,6 +592,7 @@ class CartPage(webapp2.RequestHandler):
 
             song_list = cart_obj.song_list
             template_values = {
+                'subtotal': cart_obj.subtotal_format,
                 'song_list': song_list,
                 'message': message,
                 'url': url,
@@ -534,6 +603,7 @@ class CartPage(webapp2.RequestHandler):
         else:
             message = 'Please log in in order to see and make changes to your cart.'
             template_values = {
+                'subtotal': '',
                 'song_list': [],
                 'message': message,
                 'url': url,
