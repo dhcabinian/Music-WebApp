@@ -73,23 +73,42 @@ def get_genre_key(genre_name):
 def get_user_key(user):
     return ndb.Key(User, user.user_id())
 
+def get_cart_key(user):
+    cart_id = 'Cart' + str(user.user_id())
+    return ndb.Key(Cart, cart_id)
+
 def checkUser(user):
     user_key = get_user_key(user)
     if user_key.get() is not None:
         user_obj = user_key.get()
-        cart_obj = user_obj.cart
+        cart_key = get_cart_key(user_obj.user)
+        if cart_key.get() is not None:
+            cart_obj = cart_key.get()
+        else:
+            new_cart_key = get_cart_key(user_obj.user)
+            new_cart = Cart(key=new_cart_key)
+            new_cart.subtotal=0
+            new_cart.subtotal_format='${:,.2f}'.format(0)
+            new_cart.song_list = []
+            new_cart.put()
+            user_obj.cart = new_cart
+            user_obj.put()
+            cart_key = get_cart_key(user_obj.user)
+            cart_obj = cart_key.get()
+
         return user_obj, cart_obj
     else:
         new_user_key = get_user_key(user)
         new_user = User(key=new_user_key)
         new_user.user=user
+        new_user.user_id = user.user_id()
         new_user_key = new_user.put()
-        new_cart = Cart()
-        new_cart.parent=new_user.key
+        new_cart_key = get_cart_key(user)
+        new_cart = Cart(key=new_cart_key)
         new_cart.subtotal=0
         new_cart.subtotal_format='${:,.2f}'.format(0)
         new_cart.song_list = []
-        new_cart_key = new_cart.put()
+        new_cart.put()
         new_user.cart = new_cart
         new_user.put()
         return new_user, new_cart
@@ -204,6 +223,8 @@ class GenrePage(webapp2.RequestHandler):
             song_list = genre_obj.song_list
 
             if foundUser:
+                #cart_obj_key = get_cart_key(user_obj.user)
+                #cart_obj = cart_obj_key.get()
                 numOfSongs = int(self.request.get('numOfSongs', 0))
                 added_songs = []
                 for index in range(0, numOfSongs):
