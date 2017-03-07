@@ -40,6 +40,7 @@ class Song(ndb.Model):
     date = ndb.DateTimeProperty(auto_now_add=True)
     price = ndb.FloatProperty(indexed=False)
     price_format = ndb.StringProperty(indexed=False)
+    url_string = ndb.StringProperty(indexed=False)
 
 
 class Genre(ndb.Model):
@@ -70,15 +71,30 @@ class User(ndb.Model):
 
 
 def checkUser(user):
+    print 'Pringint use_id'
+    print user.user_id()
     user_key = ndb.Key(User, user.user_id())
-    if user_key.get():
-        user_obj = user.user_id().get()
+    print 'Printing user_key.get()'
+    print user_key.get()
+    if user_key.get() is not None:
+        user_obj = user_key.get()
         cart_obj = user_obj.cart
         return user_obj, cart_obj
     else:
-        new_user = User(user=user, user_id=user.user_id(), id=user.user_id())
-        new_cart = Cart(parent=new_user.key, subtotal=0, subtotal_format='${:,.2f}'.format(0))
+        new_user_key = ndb.Key(User, user.user_id())
+        new_user = User(key=new_user_key)
+        new_user.user=user
+        new_user.user_id=user.user_id()
+        #new_user.id=user.user_id()
+        new_user_key = new_user.put()
+        new_cart = Cart()
+        new_cart.parent=new_user.key
+        new_cart.subtotal=0
+        new_cart.subtotal_format='${:,.2f}'.format(0)
+        new_cart.song_list = []
+        new_cart_key = new_cart.put()
         new_user.cart = new_cart
+        new_user.put()
         return new_user, new_cart
 # Should contain
 #   Links to each genre
@@ -150,6 +166,7 @@ class GenrePage(webapp2.RequestHandler):
                 'song_list': song_list,
                 'url': url,
                 'url_linktext': url_linktext,
+                'message': '',
             }
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
             self.response.write(template.render(template_values))
@@ -160,10 +177,99 @@ class GenrePage(webapp2.RequestHandler):
                 'song_list': [],
                 'url': url,
                 'url_linktext': url_linktext,
+                'message': '',
             }
             template = JINJA_ENVIRONMENT.get_template('genre_display.html')
             self.response.write(template.render(template_values))
 
+    def post(self):
+        # User Login
+        user = users.get_current_user()
+        foundUser = False
+        message = ''
+        if user:
+            url = users.create_logout_url(self.request.uri)
+            nickname = user.nickname()
+            url_linktext = 'Logout from ' + nickname
+            user_obj, cart_obj = checkUser(user)
+            message = ''
+            foundUser = True
+            print 'User in genre'
+            print user_obj
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'
+            message = 'Please login in order to add things to cart.'
+
+        # Genre List Generation
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
+        if contains_genre(genre_name):
+            genre_key = get_genre_key(genre_name)
+            genre_obj = genre_key.get()
+            song_list = genre_obj.song_list
+            # Converting back to uppercase
+            genre_name = genre_obj.genre_name.title()
+            for song in song_list:
+                song.artist = song.artist.title()
+                song.title = song.title.title()
+                song.album = song.album.title()
+
+
+            if foundUser:
+                numOfSongs_str = self.request.get('numOfSongs', 0)
+                print 'numOfSongs: ' + numOfSongs_str
+                numOfSongs = int(numOfSongs_str)
+                print numOfSongs
+                added_songs = []
+                for index in range(0, numOfSongs):
+                    htmlName = 'Song' + str(index)
+                    #print 'htmlName: ' + htmlName
+                    song_url_string = self.request.get(htmlName, '')
+                    #print 'Song url_string: ' + song_url_string
+                    if song_url_string is not '':
+                        added_songs.append(song_url_string)
+                user_obj, cart_obj = checkUser(user)
+                new_cart_song_list = cart_obj.song_list
+                for song_url_string in added_songs:
+                    song_key = ndb.Key(urlsafe=song_url_string)
+                    song_obj = song_key.get()
+                    #print 'Song obj: '
+                    #print song_obj
+                    new_cart_song_list = new_cart_song_list + [song_obj]
+                print new_cart_song_list
+                cart_obj.song_list = new_cart_song_list
+                print 'Cart obj song list: '
+                print cart_obj.song_list
+                cart_obj.put()
+                user_obj.cart = cart_obj
+                user_obj.put()
+                message = 'Added new songs to cart.'
+                print 'Here'
+                print ' User obj cart: '
+                print user_obj.cart
+
+
+            # Rednering
+            template_values = {
+                'genre': genre_name,
+                'song_list': song_list,
+                'url': url,
+                'url_linktext': url_linktext,
+                'message': message,
+            }
+            template = JINJA_ENVIRONMENT.get_template('genre_display.html')
+            self.response.write(template.render(template_values))
+        else:
+            # Rendering
+            template_values = {
+                'genre': genre_name,
+                'song_list': [],
+                'url': url,
+                'url_linktext': url_linktext,
+                'message': message,
+            }
+            template = JINJA_ENVIRONMENT.get_template('genre_display.html')
+            self.response.write(template.render(template_values))
 
 def price_checker(unchecked_price):
     if 0 < unchecked_price <= 100:
@@ -242,7 +348,9 @@ class CreateSongPage(webapp2.RequestHandler):
                 price_format = '${:,.2f}'.format(price)
                 new_song = Song(parent=get_genre_key(genre_name),
                                 title=title, artist=artist, album=album, price=price, price_format=price_format)
-                new_song.put()
+                new_song_key = new_song.put()
+                new_song.url_string = new_song_key.urlsafe()
+                new_song_key = new_song.put()
                 new_list = current_list + [new_song]
                 genre_obj.song_list = new_list
                 genre_obj.put()
@@ -398,6 +506,8 @@ class CartPage(webapp2.RequestHandler):
             nickname = user.nickname()
             url_linktext = 'Logout from ' + nickname
             user_obj, cart_obj = checkUser(user)
+            print 'User in cart'
+            print user_obj
             foundUser = True
         else:
             url = users.create_login_url(self.request.uri)
@@ -405,6 +515,9 @@ class CartPage(webapp2.RequestHandler):
         if foundUser:
             message = 'Your cart:'
             song_list = cart_obj.song_list
+            print 'Cart Page cart obj'
+
+            print cart_obj
             for song in song_list:
                 song.artist = song.artist.title()
                 song.title = song.title.title()
