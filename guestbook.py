@@ -71,11 +71,7 @@ class User(ndb.Model):
 
 
 def checkUser(user):
-    print 'Pringint use_id'
-    print user.user_id()
     user_key = ndb.Key(User, user.user_id())
-    print 'Printing user_key.get()'
-    print user_key.get()
     if user_key.get() is not None:
         user_obj = user_key.get()
         cart_obj = user_obj.cart
@@ -84,8 +80,6 @@ def checkUser(user):
         new_user_key = ndb.Key(User, user.user_id())
         new_user = User(key=new_user_key)
         new_user.user=user
-        new_user.user_id=user.user_id()
-        #new_user.id=user.user_id()
         new_user_key = new_user.put()
         new_cart = Cart()
         new_cart.parent=new_user.key
@@ -96,6 +90,33 @@ def checkUser(user):
         new_user.cart = new_cart
         new_user.put()
         return new_user, new_cart
+
+#Returns things in tne following
+# [foundUser, url, url_linktext, user_obj, cart_obj]
+def performUserFunctions(handler):
+    user = users.get_current_user()
+    foundUser = False
+    if user:
+        url = users.create_logout_url(handler.request.uri)
+        nickname = user.nickname()
+        url_linktext = 'Logout from ' + nickname
+        user_obj, cart_obj = checkUser(user)
+        foundUser = True
+        return foundUser, url, url_linktext, user_obj, cart_obj
+    else:
+        url = users.create_login_url(handler.request.uri)
+        url_linktext = 'Login'
+        return [foundUser, url, url_linktext, None, None]
+
+#Titilizes song List
+
+def titilizeSongList(song_list):
+    for song in song_list:
+        song.artist = song.artist.title()
+        song.title = song.title.title()
+        song.album = song.album.title()
+
+
 # Should contain
 #   Links to each genre
 #   Link to search page
@@ -111,15 +132,7 @@ class MainPage(webapp2.RequestHandler):
             genre_list.append(genre.genre_name.title())
 
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         # Rendering
         template_values = {
@@ -137,15 +150,7 @@ class MainPage(webapp2.RequestHandler):
 class GenrePage(webapp2.RequestHandler):
     def get(self):
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         # Genre List Generation
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
@@ -155,10 +160,7 @@ class GenrePage(webapp2.RequestHandler):
             song_list = genre_obj.song_list
             # Converting back to uppercase
             genre_name = genre_obj.genre_name.title()
-            for song in song_list:
-                song.artist = song.artist.title()
-                song.title = song.title.title()
-                song.album = song.album.title()
+            titilizeSongList(song_list)
 
             # Rednering
             template_values = {
@@ -184,21 +186,9 @@ class GenrePage(webapp2.RequestHandler):
 
     def post(self):
         # User Login
-        user = users.get_current_user()
-        foundUser = False
         message = ''
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-            message = ''
-            foundUser = True
-            print 'User in genre'
-            print user_obj
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+        if not foundUser:
             message = 'Please login in order to add things to cart.'
 
         # Genre List Generation
@@ -209,45 +199,27 @@ class GenrePage(webapp2.RequestHandler):
             song_list = genre_obj.song_list
             # Converting back to uppercase
             genre_name = genre_obj.genre_name.title()
-            for song in song_list:
-                song.artist = song.artist.title()
-                song.title = song.title.title()
-                song.album = song.album.title()
+            titilizeSongList(song_list)
 
 
             if foundUser:
-                numOfSongs_str = self.request.get('numOfSongs', 0)
-                print 'numOfSongs: ' + numOfSongs_str
-                numOfSongs = int(numOfSongs_str)
-                print numOfSongs
+                numOfSongs = int(self.request.get('numOfSongs', 0))
                 added_songs = []
                 for index in range(0, numOfSongs):
                     htmlName = 'Song' + str(index)
-                    #print 'htmlName: ' + htmlName
                     song_url_string = self.request.get(htmlName, '')
-                    #print 'Song url_string: ' + song_url_string
                     if song_url_string is not '':
                         added_songs.append(song_url_string)
-                user_obj, cart_obj = checkUser(user)
                 new_cart_song_list = cart_obj.song_list
                 for song_url_string in added_songs:
                     song_key = ndb.Key(urlsafe=song_url_string)
                     song_obj = song_key.get()
-                    #print 'Song obj: '
-                    #print song_obj
                     new_cart_song_list = new_cart_song_list + [song_obj]
-                print new_cart_song_list
                 cart_obj.song_list = new_cart_song_list
-                print 'Cart obj song list: '
-                print cart_obj.song_list
                 cart_obj.put()
                 user_obj.cart = cart_obj
                 user_obj.put()
                 message = 'Added new songs to cart.'
-                print 'Here'
-                print ' User obj cart: '
-                print user_obj.cart
-
 
             # Rednering
             template_values = {
@@ -289,15 +261,7 @@ def price_checker(unchecked_price):
 class CreateSongPage(webapp2.RequestHandler):
     def get(self):
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         # Obtaining Genre to add to
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
@@ -313,15 +277,8 @@ class CreateSongPage(webapp2.RequestHandler):
 
     def post(self):
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
         # Obtaining Genre to add to
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         if not contains_genre(genre_name):
@@ -385,15 +342,8 @@ def contains_genre(genre_name):
 class CreateGenrePage(webapp2.RequestHandler):
     def get(self):
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
         template = JINJA_ENVIRONMENT.get_template('create_genre.html')
         template_values = {
             'new_genre': '',
@@ -405,15 +355,8 @@ class CreateGenrePage(webapp2.RequestHandler):
 
     def post(self):
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
         library_name = DEFAULT_LIBRARY_NAME
         new_genre = self.request.get('new_genre').lower()
         if ' ' in new_genre:
@@ -442,15 +385,8 @@ class CreateGenrePage(webapp2.RequestHandler):
 class SearchPage(webapp2.RequestHandler):
     def get(self):
         # User Login
-        user = users.get_current_user()
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
         template = JINJA_ENVIRONMENT.get_template('search.html')
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
         new_page = 0
@@ -465,10 +401,8 @@ class SearchPage(webapp2.RequestHandler):
             filtered_list = []
             for song in song_list:
                 if artist.lower() in song.artist.lower():
-                    song.artist = song.artist.title()
-                    song.title = song.title.title()
-                    song.album = song.album.title()
                     filtered_list.append(song)
+            titilizeSongList(filtered_list)
             if not filtered_list:
                 message = 'No songs found'
             else:
@@ -499,29 +433,14 @@ class SearchPage(webapp2.RequestHandler):
 class CartPage(webapp2.RequestHandler):
     def get(self):
         # User Login
-        user = users.get_current_user()
-        foundUser = False
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-            print 'User in cart'
-            print user_obj
-            foundUser = True
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
         if foundUser:
             message = 'Your cart:'
             song_list = cart_obj.song_list
-            print 'Cart Page cart obj'
+            #print 'Cart Page cart obj'
 
-            print cart_obj
-            for song in song_list:
-                song.artist = song.artist.title()
-                song.title = song.title.title()
-                song.album = song.album.title()
+            titilizeSongList(song_list)
             template_values = {
                 'song_list': song_list,
                 'message': message,
@@ -543,24 +462,12 @@ class CartPage(webapp2.RequestHandler):
 
     def post(self):
         # User Login
-        user = users.get_current_user()
-        foundUser = False
-        if user:
-            url = users.create_logout_url(self.request.uri)
-            nickname = user.nickname()
-            url_linktext = 'Logout from ' + nickname
-            user_obj, cart_obj = checkUser(user)
-            foundUser = True
-        else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'
+        foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
+
         if foundUser:
             message = 'Your cart:'
             song_list = cart_obj.song_list
-            for song in song_list:
-                song.artist = song.artist.title()
-                song.title = song.title.title()
-                song.album = song.album.title()
+            titilizeSongList(song_list)
             template_values = {
                 'song_list': song_list,
                 'message': message,
