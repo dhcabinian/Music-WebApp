@@ -17,26 +17,17 @@ JINJA_ENVIRONMENT = jinja2.Environment(
 DEFAULT_GENRE_NAME = 'Trap'
 DEFAULT_LIBRARY_NAME = 'David\'s Library'
 DEFAULT_SONG_NUMBER = 50
+DEFAULT_DATABASE_NAME = 'David Database'
 
-
-def get_library_key(library_name=DEFAULT_LIBRARY_NAME):
-    return ndb.Key('Library', library_name)
-
-
-def get_genre_key(genre_name=DEFAULT_GENRE_NAME):
-    library_name = DEFAULT_LIBRARY_NAME
-    genre_entity_list = Genre.query(ancestor=get_library_key(
-        library_name)).fetch(DEFAULT_SONG_NUMBER)
-    for genre in genre_entity_list:
-        if genre.genre_name == genre_name:
-            return genre.key
-    return None
 
 
 class Song(ndb.Model):
-    title = ndb.StringProperty(indexed=True)
-    artist = ndb.StringProperty(indexed=True)
+    title = ndb.StringProperty(indexed=False)
+    artist = ndb.StringProperty(indexed=False)
     album = ndb.StringProperty(indexed=False)
+    s_title = ndb.StringProperty(indexed=False)
+    s_artist = ndb.StringProperty(indexed=True)
+    s_album = ndb.StringProperty(indexed=False)
     date = ndb.DateTimeProperty(auto_now_add=True)
     price = ndb.FloatProperty(indexed=False)
     price_format = ndb.StringProperty(indexed=False)
@@ -44,7 +35,8 @@ class Song(ndb.Model):
 
 
 class Genre(ndb.Model):
-    genre_name = ndb.StringProperty(indexed=True)
+    genre_name = ndb.StringProperty(indexed=False)
+    s_genre_name = ndb.StringProperty(indexed=True)
     song_list = ndb.StructuredProperty(Song, repeated=True)
 
 
@@ -68,16 +60,27 @@ class User(ndb.Model):
     user = ndb.UserProperty()
     user_id = ndb.StringProperty()
 
+class MusicLibrary(ndb.Model):
+    genres = ndb.StringProperty(repeated=True)
+    s_genres = ndb.StringProperty(repeated=True)
 
+def get_library_key(library_name=DEFAULT_LIBRARY_NAME):
+    return ndb.Key(MusicLibrary, library_name)
+
+def get_genre_key(genre_name):
+    return ndb.Key(Genre, genre_name.lower())
+
+def get_user_key(user):
+    return ndb.Key(User, user.user_id())
 
 def checkUser(user):
-    user_key = ndb.Key(User, user.user_id())
+    user_key = get_user_key(user)
     if user_key.get() is not None:
         user_obj = user_key.get()
         cart_obj = user_obj.cart
         return user_obj, cart_obj
     else:
-        new_user_key = ndb.Key(User, user.user_id())
+        new_user_key = get_user_key(user)
         new_user = User(key=new_user_key)
         new_user.user=user
         new_user_key = new_user.put()
@@ -108,14 +111,14 @@ def performUserFunctions(handler):
         url_linktext = 'Login'
         return [foundUser, url, url_linktext, None, None]
 
-#Titilizes song List
-
-def titilizeSongList(song_list):
-    for song in song_list:
-        song.artist = song.artist.title()
-        song.title = song.title.title()
-        song.album = song.album.title()
-
+def libraryCheck():
+    library_key = get_library_key(DEFAULT_LIBRARY_NAME)
+    library_obj = library_key.get()
+    if library_obj is None:
+        library_obj = MusicLibrary(key=library_key)
+        library_obj.genres = []
+        library_obj.s_genres = []
+        library_obj.put()
 
 # Should contain
 #   Links to each genre
@@ -123,14 +126,12 @@ def titilizeSongList(song_list):
 #   Link to song entry page
 class MainPage(webapp2.RequestHandler):
     def get(self):
+        libraryCheck()
         # Genre List Generation
-        library_name = DEFAULT_LIBRARY_NAME
-        genre_entity_list = Genre.query(ancestor=get_library_key(
-            library_name)).fetch(DEFAULT_SONG_NUMBER)
-        genre_list = []
-        for genre in genre_entity_list:
-            genre_list.append(genre.genre_name.title())
-
+        library_key = get_library_key(DEFAULT_LIBRARY_NAME)
+        library_obj = library_key.get()
+        genre_list = library_obj.genres
+        print genre_list
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
@@ -149,22 +150,19 @@ class MainPage(webapp2.RequestHandler):
 #   return to main page link
 class GenrePage(webapp2.RequestHandler):
     def get(self):
+        libraryCheck()
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         # Genre List Generation
-        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
-        if contains_genre(genre_name):
-            genre_key = get_genre_key(genre_name)
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
+        genre_key = get_genre_key(genre_name)
+        if genre_key.get() is not None:
             genre_obj = genre_key.get()
             song_list = genre_obj.song_list
-            # Converting back to uppercase
-            genre_name = genre_obj.genre_name.title()
-            titilizeSongList(song_list)
-
             # Rednering
             template_values = {
-                'genre': genre_name,
+                'genre': genre_obj.genre_name,
                 'song_list': song_list,
                 'url': url,
                 'url_linktext': url_linktext,
@@ -192,15 +190,11 @@ class GenrePage(webapp2.RequestHandler):
             message = 'Please login in order to add things to cart.'
 
         # Genre List Generation
-        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
-        if contains_genre(genre_name):
-            genre_key = get_genre_key(genre_name)
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
+        genre_key = get_genre_key(genre_name)
+        if genre_key.get() is not None:
             genre_obj = genre_key.get()
             song_list = genre_obj.song_list
-            # Converting back to uppercase
-            genre_name = genre_obj.genre_name.title()
-            titilizeSongList(song_list)
-
 
             if foundUser:
                 numOfSongs = int(self.request.get('numOfSongs', 0))
@@ -223,7 +217,7 @@ class GenrePage(webapp2.RequestHandler):
 
             # Rednering
             template_values = {
-                'genre': genre_name,
+                'genre': genre_obj.genre_name,
                 'song_list': song_list,
                 'url': url,
                 'url_linktext': url_linktext,
@@ -260,14 +254,15 @@ def price_checker(unchecked_price):
 #   Return to main page link
 class CreateSongPage(webapp2.RequestHandler):
     def get(self):
+        libraryCheck()
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         # Obtaining Genre to add to
-        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
 
         template_values = {
-            'genre_name': genre_name.title(),
+            'genre_name': genre_name,
             'message': '',
             'url': url,
             'url_linktext': url_linktext,
@@ -281,13 +276,14 @@ class CreateSongPage(webapp2.RequestHandler):
 
         # Obtaining Genre to add to
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
-        if not contains_genre(genre_name):
+        genre_key = get_genre_key(genre_name)
+        if genre_key.get() is None:
             message = 'Genre has not been created or was misspelled'
         else:
             # Convert to lowercase for stoarge and easy matching
-            artist = self.request.get('artist').lower()
-            title = self.request.get('title').lower()
-            album = self.request.get('album').lower()
+            artist = self.request.get('artist')
+            title = self.request.get('title')
+            album = self.request.get('album')
             # Valid Price Checking
             if self.request.get('price') != '':
                 if price_checker(float(self.request.get('price'))):
@@ -303,8 +299,15 @@ class CreateSongPage(webapp2.RequestHandler):
                 genre_obj = get_genre_key(genre_name).get()
                 current_list = genre_obj.song_list
                 price_format = '${:,.2f}'.format(price)
-                new_song = Song(parent=get_genre_key(genre_name),
-                                title=title, artist=artist, album=album, price=price, price_format=price_format)
+                new_song = Song(parent=get_genre_key(genre_name))
+                new_song.title=title
+                new_song.artist=artist
+                new_song.album=album
+                new_song.price=price
+                new_song.price_format=price_format
+                new_song.s_title=title.lower()
+                new_song.s_artist=artist.lower()
+                new_song.s_album=album.lower()
                 new_song_key = new_song.put()
                 new_song.url_string = new_song_key.urlsafe()
                 new_song_key = new_song.put()
@@ -312,14 +315,14 @@ class CreateSongPage(webapp2.RequestHandler):
                 genre_obj.song_list = new_list
                 genre_obj.put()
                 # Generate messages
-                message = 'Created song in genre ' + genre_name.title() + \
+                message = 'Created song in genre ' + genre_name + \
                           ': Price: ' + new_song.price_format + ', Title: ' + \
                           new_song.title.title() + ', Artist: ' + new_song.artist.title()
                 if new_song.album != '':
                     message += ', Album: ' + new_song.album.title()
         # Rendering
         template_values = {
-            'genre_name': genre_name.title(),
+            'genre_name': genre_name,
             'message': message,
             'url': url,
             'url_linktext': url_linktext,
@@ -328,19 +331,9 @@ class CreateSongPage(webapp2.RequestHandler):
         self.response.write(template.render(template_values))
 
 
-def contains_genre(genre_name):
-    library_name = DEFAULT_LIBRARY_NAME
-    genre_entity_list = Genre.query(ancestor=get_library_key(
-        library_name)).fetch(DEFAULT_SONG_NUMBER)
-    contains = False
-    for genre in genre_entity_list:
-        if genre.genre_name == genre_name:
-            contains = True
-    return contains
-
-
 class CreateGenrePage(webapp2.RequestHandler):
     def get(self):
+        libraryCheck()
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
@@ -357,22 +350,30 @@ class CreateGenrePage(webapp2.RequestHandler):
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
-        library_name = DEFAULT_LIBRARY_NAME
-        new_genre = self.request.get('new_genre').lower()
+        new_genre = self.request.get('new_genre')
         if ' ' in new_genre:
             message = "Spaces in message not allowed"
         else:
-            genre_obj = Genre(parent=get_library_key(
-                library_name), genre_name=new_genre)
+            genre_key = get_genre_key(new_genre)
+            genre_obj = Genre(key=genre_key)
+            genre_obj.genre_name=new_genre
+            genre_obj.s_genre_name=new_genre.lower()
             genre_obj.put()
-            template = JINJA_ENVIRONMENT.get_template('create_genre.html')
-            message = "Created genre: " + new_genre.title()
+            library_key = get_library_key(DEFAULT_LIBRARY_NAME)
+            library_obj = library_key.get()
+            genre_list = library_obj.genres
+            library_obj.genres = genre_list + [genre_obj.genre_name]
+            s_genre_list = library_obj.s_genres
+            library_obj.s_genres = s_genre_list + [genre_obj.s_genre_name]
+            library_obj.put()
+            message = "Created genre: " + new_genre
         template_values = {
-            'new_genre': new_genre.title(),
+            'new_genre': new_genre,
             'message': message,
             'url': url,
             'url_linktext': url_linktext,
         }
+        template = JINJA_ENVIRONMENT.get_template('create_genre.html')
         self.response.write(template.render(template_values))
 
 
@@ -384,32 +385,32 @@ class CreateGenrePage(webapp2.RequestHandler):
 #   Return to home link
 class SearchPage(webapp2.RequestHandler):
     def get(self):
+        libraryCheck()
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         template = JINJA_ENVIRONMENT.get_template('search.html')
-        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME).lower()
+        genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
         new_page = 0
         if self.request.get('genre_name').lower() == '':
             new_page = 1
             genre_name = DEFAULT_GENRE_NAME
-        artist = self.request.get('artist').lower()
+        artist = self.request.get('artist')
         if artist != '':
             genre_key = get_genre_key(genre_name)
             genre_obj = genre_key.get()
             song_list = genre_obj.song_list
             filtered_list = []
             for song in song_list:
-                if artist.lower() in song.artist.lower():
+                if artist.lower() in song.s_artist:
                     filtered_list.append(song)
-            titilizeSongList(filtered_list)
             if not filtered_list:
                 message = 'No songs found'
             else:
-                message = 'Found songs in ' + genre_name.title()
+                message = 'Found songs in ' + genre_name
 
             template_values = {
-                'genre_name': genre_name.title(),
+                'genre_name': genre_name,
                 'song_list': filtered_list,
                 'message': message,
                 'url': url,
@@ -422,7 +423,7 @@ class SearchPage(webapp2.RequestHandler):
             else:
                 message = 'No artist entered'
             template_values = {
-                'genre_name': genre_name.title(),
+                'genre_name': genre_name,
                 'song_list': [],
                 'message': message,
                 'url': url,
@@ -432,15 +433,14 @@ class SearchPage(webapp2.RequestHandler):
 
 class CartPage(webapp2.RequestHandler):
     def get(self):
+        libraryCheck()
         # User Login
         foundUser, url, url_linktext, user_obj, cart_obj = performUserFunctions(self)
 
         if foundUser:
             message = 'Your cart:'
             song_list = cart_obj.song_list
-            #print 'Cart Page cart obj'
 
-            titilizeSongList(song_list)
             template_values = {
                 'song_list': song_list,
                 'message': message,
@@ -467,7 +467,6 @@ class CartPage(webapp2.RequestHandler):
         if foundUser:
             message = 'Your cart:'
             song_list = cart_obj.song_list
-            titilizeSongList(song_list)
             template_values = {
                 'song_list': song_list,
                 'message': message,
