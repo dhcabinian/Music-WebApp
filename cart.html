@@ -18,7 +18,7 @@
     <div class="container">
           <form action="" method="post">
             {% for song in song_list %}
-              <input type="checkbox" name="Song{{ loop.index0 }}" value="{{ song.key }}"> {{song.price_format}}, {{song.title}}, {{song.artist}}, {{song.album}}
+              <input type="checkbox" name="Song{{ loop.index0 }}" value="{{ song.url_string }}"> {{song.price_format}}, {{song.title}}, {{song.artist}}, {{song.album}}
               <br>
               <input type="hidden" name="numOfSongs" value="{{ loop.length }}">
             {% endfor %}
