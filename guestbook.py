@@ -148,6 +148,16 @@ def updateCart(cart_obj):
     cart_obj.subtotal_format = '${:,.2f}'.format(cart_obj.subtotal)
     cart_obj.put()
 
+def get_ordered_genre_list(genre_name):
+    library_key = get_library_key()
+    library_obj = library_key.get()
+    genre_list = library_obj.genres
+    for genre in genre_list:
+        if genre in genre_name:
+            genre_list.remove(genre)
+    genre_list.insert(0, genre_name)
+    return genre_list
+
 # Should contain
 #   Links to each genre
 #   Link to search page
@@ -299,7 +309,11 @@ class CreateSongPage(webapp2.RequestHandler):
         # Obtaining Genre to add to
         genre_name = self.request.get('genre_name', DEFAULT_GENRE_NAME)
 
+        genre_list = get_ordered_genre_list(genre_name)
+
+
         template_values = {
+            'genre_list': genre_list,
             'genre_name': genre_name,
             'message': '',
             'url': url,
@@ -352,8 +366,11 @@ class CreateSongPage(webapp2.RequestHandler):
                           new_song.title + ', Artist: ' + new_song.artist
                 if new_song.album != '':
                     message += ', Album: ' + new_song.album
+
+        genre_list = get_ordered_genre_list(genre_name)
         # Rendering
         template_values = {
+            'genre_list': genre_list,
             'genre_name': genre_name,
             'message': message,
             'url': url,
@@ -440,7 +457,9 @@ class SearchPage(webapp2.RequestHandler):
             else:
                 message = 'Found songs in ' + genre_name
 
+            genre_list = get_ordered_genre_list(genre_name)
             template_values = {
+                'genre_list': genre_list,
                 'genre_name': genre_name,
                 'song_list': filtered_list,
                 'message': message,
@@ -453,7 +472,9 @@ class SearchPage(webapp2.RequestHandler):
                 message = ''
             else:
                 message = 'No artist entered'
+            genre_list = get_ordered_genre_list(genre_name)
             template_values = {
+                'genre_list': genre_list,
                 'genre_name': genre_name,
                 'song_list': [],
                 'message': message,
@@ -509,7 +530,9 @@ class SearchPage(webapp2.RequestHandler):
                 else:
                     message = 'Please login in order to add things to cart.'
 
+            genre_list = get_ordered_genre_list(genre_name)
             template_values = {
+                'genre_list': genre_list,
                 'genre_name': genre_name,
                 'song_list': filtered_list,
                 'message': message,
@@ -522,7 +545,9 @@ class SearchPage(webapp2.RequestHandler):
                 message = ''
             else:
                 message = 'No artist entered'
+            genre_list = get_ordered_genre_list(genre_name)
             template_values = {
+                'genre_list': genre_list,
                 'genre_name': genre_name,
                 'song_list': [],
                 'message': message,

@@ -25,7 +25,11 @@
     </form>
 
     <form>Genre:
-        <input value="{{genre_name}}" name="genre_name">
+        <select name="genre_name">
+          {% for genre in genre_list %}
+          <option value="{{ genre }}">{{ genre }}</option>
+          {% endfor %}
+        </select>
         <button type="submit">Switch</button>
     </form>
     <br><br>
